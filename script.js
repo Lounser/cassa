@@ -30,7 +30,7 @@ function formatCurrency(amount) {
 const categories = loadData('categories', []);
 const orders = loadData('orders', {});
 const tables = loadData('tables', [1, 2, 3, 4, 5]);
-let activeTable = tables[0] || null;
+let activeTable = loadData('activeTable', null); // Load from localStorage
 let currentActiveTableButton = null;
 let discounts = loadData('discounts', {});
 let isSearching = false;
@@ -63,7 +63,9 @@ const dom = {
     cartSection: $('#cart-section'),
     productSection: $('#product-section'),
     categorySection: $('#category-section'),
-    searchSpinnerContainer: $('<div>').addClass('d-flex justify-content-center mt-2')
+    searchSpinnerContainer: $('<div>').addClass('d-flex justify-content-center mt-2'),
+    tableSelectionTitle: $('#table-selection-title'), // Store the title element
+    // changeTableButton: $('#change-table-button'), //  Кнопка выбора столика больше не нужна, удалена
 };
 
 // === Operation Queue ===
@@ -88,6 +90,12 @@ async function processQueue() {
 // === Rendering Functions ===
 function renderTables() {
     dom.tablesContainer.empty();
+    // Добавлена подсказка, если столики не загружены
+    if (tables.length === 0) {
+        dom.tablesContainer.append('<p class="text-muted">Нет доступных столиков.  Пожалуйста, добавьте столики в админке.</p>');
+        return;
+    }
+
     tables.forEach(table => {
         const button = $('<button>')
             .addClass(`table-btn ${orders[table] && orders[table].length > 0 ? 'occupied-table' : ''} ${activeTable === table ? 'active-table' : ''}`)
@@ -99,7 +107,14 @@ function renderTables() {
 }
 
 function renderCategories() {
+    //  Убедитесь, что здесь не очищается dom.tablesContainer
     dom.categoriesContainer.empty();
+
+    // Добавлена подсказка, если категории не загружены
+    if (categories.length === 0) {
+        dom.categoriesContainer.append('<p class="text-muted">Нет доступных категорий.  Пожалуйста, добавьте категории в админке.</p>');
+        return;
+    }
 
     categories.forEach((category, index) => {
         const div = $('<div>')
@@ -136,10 +151,23 @@ function renderProductsByCategory(categoryIndex) {
     const category = categories[categoryIndex];
     const startIndex = (currentPage - 1) * productsPerPage;
     const endIndex = startIndex + productsPerPage;
-    const productsToDisplay = category.products.slice(startIndex, endIndex);
+    let productsToDisplay;
+
+    if (isSearching) {
+        // If searching, productsToDisplay will be set in searchProducts()
+        productsToDisplay = []; // Or load from a separate search results array if you have one
+    } else {
+        productsToDisplay = category.products.slice(startIndex, endIndex);
+    }
 
     dom.productsContainer.html(`<h3 class="text-center mb-3">Товары в категории: ${category.name}</h3><div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3"></div>`);
     const row = dom.productsContainer.find('.row');
+
+    // Добавлена подсказка, если в категории нет товаров
+    if (productsToDisplay.length === 0) {
+        dom.productsContainer.append('<p class="text-muted">В этой категории нет товаров.</p>');
+        return;
+    }
 
     productsToDisplay.forEach(product => {
         const div = $('<div>').addClass('col');
@@ -221,30 +249,35 @@ function renderCart() {
     dom.cartElement.empty();
     let total = 0;
 
-    if (activeTable && orders[activeTable]) {
-        orders[activeTable].forEach((item, index) => {
-            const itemDiscount = discounts[item.catIndex] && discounts[item.catIndex][item.prodIndex] ? discounts[item.catIndex][item.prodIndex] : 0;
-            let discountedPrice = item.price - itemDiscount;
-            discountedPrice = discountedPrice < 0 ? 0 : discountedPrice
-
-            const itemTotal = discountedPrice * item.quantity;
-            total += itemTotal;
-
-            const li = $('<li>').addClass('list-group-item d-flex justify-content-between align-items-center').html(`
-                <div>
-                    ${item.name} - ${formatCurrency(item.price)} x ${item.quantity}
-                    ${itemDiscount > 0 ? `<span class="text-success"> (скидка: ${formatCurrency(itemDiscount)} за шт.)</span>` : ''}
-                </div>
-                <div class="quantity-controls">
-                    <button class="btn btn-sm btn-secondary decrease-quantity" data-index="${index}" aria-label="Уменьшить количество"><i class="fas fa-minus"></i></button>
-                    <input type="number" class="form-control cart-quantity-input" value="${item.quantity}" min="1" data-index="${index}" aria-label="Количество">
-                    <button class="btn btn-sm btn-secondary increase-quantity" data-index="${index}" aria-label="Увеличить количество"><i class="fas fa-plus"></i></button>
-                    <button class="btn btn-danger btn-sm remove-from-cart" data-index="${index}" aria-label="Удалить из корзины"><i class="fas fa-trash"></i></button>
-                </div>
-            `);
-            dom.cartElement.append(li);
-        });
+    // Добавлена подсказка, если корзина пуста
+    if (!activeTable || !orders[activeTable] || orders[activeTable].length === 0) {
+        dom.cartElement.append('<p class="text-muted">Корзина пуста.</p>');
+        dom.totalElement.text(formatCurrency(0));
+        return;
     }
+
+    orders[activeTable].forEach((item, index) => {
+        const itemDiscount = discounts[item.catIndex] && discounts[item.catIndex][item.prodIndex] ? discounts[item.catIndex][item.prodIndex] : 0;
+        let discountedPrice = item.price - itemDiscount;
+        discountedPrice = discountedPrice < 0 ? 0 : discountedPrice
+
+        const itemTotal = discountedPrice * item.quantity;
+        total += itemTotal;
+
+        const li = $('<li>').addClass('list-group-item d-flex justify-content-between align-items-center').html(`
+            <div>
+                ${item.name} - ${formatCurrency(item.price)} x ${item.quantity}
+                ${itemDiscount > 0 ? `<span class="text-success"> (скидка: ${formatCurrency(itemDiscount)} за шт.)</span>` : ''}
+            </div>
+            <div class="quantity-controls">
+                <button class="btn btn-sm btn-secondary decrease-quantity" data-index="${index}" aria-label="Уменьшить количество"><i class="fas fa-minus"></i></button>
+                <input type="number" class="form-control cart-quantity-input" value="${item.quantity}" min="1" data-index="${index}" aria-label="Количество">
+                <button class="btn btn-sm btn-secondary increase-quantity" data-index="${index}" aria-label="Увеличить количество"><i class="fas fa-plus"></i></button>
+                <button class="btn btn-danger btn-sm remove-from-cart" data-index="${index}" aria-label="Удалить из корзины"><i class="fas fa-trash"></i></button>
+            </div>
+        `);
+        dom.cartElement.append(li);
+    });
 
     dom.totalElement.text(formatCurrency(total));
 }
@@ -254,7 +287,7 @@ function selectTable(table) {
     if (activeTable === table) return; // Не ререндерить, если тот же столик
     activeTable = table;
     saveData('activeTable', activeTable);
-    renderTables();
+    renderTables(); //  Перемещено сюда
     dom.currentTableElement.text(`Столик ${table}`);
     renderCart();
     showSectionsBasedOnTableSelection();
@@ -344,7 +377,7 @@ function setupEventListeners() {
     dom.searchField.on('input', searchProducts);
     dom.generateReportButton.on('click', generateReport);
     dom.clearReportButton.on('click', clearReports);
-    dom.exportReportButton.on('click', exportReportToCSV);
+    dom.exportReportButton.on('click', exportReportToPDF);
 
     dom.productsContainer.on('click', '.add-to-cart-btn', function() {
         const product = $(this).data('product'); // Access the stored product object directly
@@ -427,46 +460,49 @@ function showPaymentModal() {
             })
             .catch(error => {
                 console.error('Payment process failed:', error);
+                alert(error); // Отображаем сообщение об ошибке пользователю
                 paymentModal.hide(); // Закрываем модальное окно при ошибке
             });
     });
 }
 
 function processPayment(paymentMethod) {
-    if (!paymentMethod) {
-        alert('Ошибка: выберите способ оплаты.');
-        return;
-    }
+    return new Promise((resolve, reject) => {  // Обернули в Promise
+        if (!paymentMethod) {
+            reject('Ошибка: выберите способ оплаты.');
+            return;
+        }
 
-    let totalText = dom.totalElement.text().replace(/[^\d.,]/g, '').replace(',', '.').trim();
-    if (!totalText) {
-        alert('Ошибка: сумма оплаты некорректна.');
-        return;
-    }
+        let totalText = dom.totalElement.text().replace(/[^\d.,]/g, '').replace(',', '.').trim();
+        if (!totalText) {
+            reject('Ошибка: сумма оплаты некорректна.');
+            return;
+        }
 
-    const total = totalText ? parseFloat(totalText) : 0;
-    if (isNaN(total) || total <= 0) {
-        alert('Ошибка: сумма оплаты некорректна.');
-        return;
-    }
+        const total = totalText ? parseFloat(totalText) : 0;
+        if (isNaN(total) || total <= 0) {
+            reject('Ошибка: сумма оплаты некорректна.');
+            return;
+        }
 
-    const paymentData = {
-        table: activeTable,
-        total,
-        paymentMethod,
-        timestamp: new Date().toISOString(),
-        items: orders[activeTable] ? [...orders[activeTable]] : []
-    };
+        const paymentData = {
+            table: activeTable,
+            total,
+            paymentMethod,
+            timestamp: new Date().toISOString(),
+            items: orders[activeTable] ? [...orders[activeTable]] : []
+        };
 
-    savePaymentData(paymentData);
+        savePaymentData(paymentData);
 
-    // Clear the cart *after* saving the payment data.
-    clearCart();
-    // Clear Orders as well
-    delete orders[activeTable]; // Corrected line
-    saveData('orders', orders);
+        // Clear the cart *after* saving the payment data.
+        clearCart();
+        // Clear Orders as well
+        delete orders[activeTable]; // Corrected line
+        saveData('orders', orders);
 
-    showPaymentSuccessModal();
+        resolve(); // Успешное выполнение
+    });
 }
 
 function savePaymentData(paymentData) {
@@ -489,7 +525,7 @@ function clearReports() {
 
 function searchProducts() {
     const searchTerm = dom.searchField.val().toLowerCase();
-     if (searchTerm.length < 2) { // Require at least 2 characters for meaningful search
+    if (searchTerm.length < 2) { // Require at least 2 characters for meaningful search
          dom.productsContainer.empty().html('<p class="text-center">Введите минимум 2 символа для поиска.</p>');
          return;
      }
@@ -510,42 +546,47 @@ function searchProducts() {
         product.categoryName.toLowerCase().includes(searchTerm) //Search category as well
     );
 
-    dom.productsContainer.empty();
-
-    if (filteredProducts.length > 0) {
-      dom.productsContainer.html(`<h3 class="text-center mb-3">Результаты поиска</h3><div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3"></div>`);
-      const row = dom.productsContainer.find('.row');
-
-      filteredProducts.forEach(product => {
-          const div = $('<div>').addClass('col');
-          const button = $('<button>')
-              .addClass('btn btn-sm btn-outline-secondary add-to-cart-btn')
-              .data('product', product) // Store the object directly in jQuery data
-              .data('cat-index', product.catIndex)
-              .data('prod-index', product.prodIndex)
-              .html('<i class="fas fa-plus"></i> В корзину');
-
-          const cardBody = $('<div>').addClass('card-body').html(`
-              <p class="card-text product-name">${product.name} (${product.categoryName})</p>
-              <div class="d-flex justify-content-between align-items-center">
-                  <div class="input-group">
-                      <input type="number" class="form-control product-quantity" value="1" min="1" aria-label="Количество">
-                  </div>
-                  <small class="text-muted">${formatCurrency(product.price)}</small>
-              </div>
-          `);
-
-          cardBody.find('.input-group').append(button); // Append the button after the input
-
-          div.html($('<div>').addClass('card shadow-sm product-card').html(cardBody));
-          row.append(div);
-      });
-    } else {
-        dom.productsContainer.html('<p class="text-center">Ничего не найдено.</p>');
-    }
+    // Render the filtered products
+    renderSearchResults(filteredProducts);
     hideSearchLoadingSpinner();//Hide loading spinner
     isSearching = false;
 }
+
+function renderSearchResults(filteredProducts) {
+    dom.productsContainer.empty();
+    if (filteredProducts.length > 0) {
+        dom.productsContainer.html(`<h3 class="text-center mb-3">Результаты поиска</h3><div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3"></div>`);
+        const row = dom.productsContainer.find('.row');
+
+        filteredProducts.forEach(product => {
+            const div = $('<div>').addClass('col');
+            const button = $('<button>')
+                .addClass('btn btn-sm btn-outline-secondary add-to-cart-btn')
+                .data('product', product) // Store the object directly in jQuery data
+                .data('cat-index', product.catIndex)
+                .data('prod-index', product.prodIndex)
+                .html('<i class="fas fa-plus"></i> В корзину');
+
+            const cardBody = $('<div>').addClass('card-body').html(`
+                <p class="card-text product-name">${product.name} (${product.categoryName})</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="input-group">
+                        <input type="number" class="form-control product-quantity" value="1" min="1" aria-label="Количество">
+                    </div>
+                    <small class="text-muted">${formatCurrency(product.price)}</small>
+                </div>
+            `);
+
+            cardBody.find('.input-group').append(button); // Append the button after the input
+
+            div.html($('<div>').addClass('card shadow-sm product-card').html(cardBody));
+            row.append(div);
+        });
+    } else {
+        dom.productsContainer.html('<p class="text-center">Ничего не найдено.</p>');
+    }
+}
+
 
 function generateReport() {
     let payments = loadData('payments', []);
@@ -565,86 +606,129 @@ function renderReportPage(payments, page) {
     const startIndex = (page - 1) * ordersPerPage;
     const endIndex = startIndex + ordersPerPage;
     const ordersToDisplay = payments.slice(startIndex, endIndex);
+  
+    let reportHTML = `<style>
+        body {
+          font-family: sans-serif;
+          line-height: 1.4;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 20px; /*Добавляем отступ до и после таблиц*/
+        }
+        th,
+        td {
+          border: 1px solid #ddd;
+          padding: 8px;
+          text-align: left;
+        }
+        th {
+          background-color: #f2f2f2;
+        }
+        .payment-summary {
+          margin-top: 20px;
+          font-weight: bold;
+          font-size: 1.1em; /* Increase font size for prominence */
+        }
+        .category-revenue {
+          margin-top: 20px;
+        }
+        .category-revenue table {
+          width: 50%;
+        }
+        .page-break {
+          page-break-inside: avoid;
+          page-break-after: always;
+        }
+        .bottom-padding{ margin-bottom: 50px;}/*Увеличим низний отступ*/
 
-    let reportHTML = '';
+        /* Ensure that all containers expand to content height */
+        #report-container {
+          overflow: visible !important; /* Override any clipping */
+          position: relative; /* Ensure proper layout when needed */
+          width: 100%; /* Take full width */
+        }
+        /* Optional: style the list to be less bulky */
+        ul {
+          list-style-type: none;
+          padding: 0;
+        }
+        li {
+          margin-bottom: 0.5em;
+        }
+    </style>`;
+
     let totalCash = 0;
     let totalCard = 0;
     let categoryRevenue = {};
     let totalRevenue = 0;
+    let tableRevenue = {};
 
+    reportHTML += '<h2>Отчет о продажах</h2>';
+
+//Рассчитываем выручку по столам и по категориям сразу в этом цикле.
     ordersToDisplay.forEach(payment => {
-        let orderItemsHTML = '';
-        if (payment.items && payment.items.length > 0) {
-            orderItemsHTML = '<ul class="list-unstyled">';
-            payment.items.forEach(item => {
-                orderItemsHTML += `<li>${item.name} x ${item.quantity} - ${formatCurrency(item.price * item.quantity)}</li>`;
-            });
-            orderItemsHTML += '</ul>';
-        } else {
-            orderItemsHTML = '<p>Нет товаров в заказе.</p>';
-        }
-
-      reportHTML += `
-          <div class="card mb-3">
-              <div class="card-body">
-                  <h5 class="card-title">Столик ${payment.table}</h5>
-                  <p class="card-text"><strong>Дата:</strong> ${new Date(payment.timestamp).toLocaleString()}</p>
-                  <p class="card-text"><strong>Способ оплаты:</strong> ${payment.paymentMethod}</p>
-                  <p class="card-text"><strong>Сумма:</strong> ${formatCurrency(payment.total)}</p>
-                  <p class="card-text"><strong>Заказанные товары:</strong></p>
-                  ${orderItemsHTML}
-              </div>
-          </div>`;
-        if (payment.paymentMethod === 'cash') {
-            totalCash += payment.total;
-        } else if (payment.paymentMethod === 'card') {
-            totalCard += payment.total;
-        }
-        totalRevenue += payment.total;
-    });
-
-        // Summary of payment methods
-    reportHTML += `
-        <div class="payment-summary mt-3">
-            <p><strong>Оплат наличными:</strong> ${formatCurrency(totalCash)}</p>
-            <p><strong>Оплат картой:</strong> ${formatCurrency(totalCard)}</p>
-        </div>
-    `;
-
-    let catRevenueTable = `<div class="revenue-by-category"><p><strong>Выручка по категориям:</strong></p><table class="table">
-        <thead>
-            <tr>
-                <th>Категория</th>
-                <th>Выручка</th>
-            </tr>
-        </thead>
-        <tbody>`;
-    let totalCatRevenue = 0;
-    ordersToDisplay.forEach(payment => {
-      if(payment.items && payment.items.length > 0){
-        payment.items.forEach(item => {
-          const itemTotal = item.price * item.quantity;
-          if (!categoryRevenue[item.catIndex]) {
-              categoryRevenue[item.catIndex] = 0;
-          }
-          categoryRevenue[item.catIndex] += itemTotal;
-        });
+      if (!tableRevenue[payment.table]) {
+        tableRevenue[payment.table] = 0;
       }
-    });
-    for (const catIndex in categoryRevenue) {
-        const categoryName = categories[catIndex].name;
-        const revenue = categoryRevenue[catIndex];
-        totalCatRevenue += revenue;
-        catRevenueTable += `<tr><td>${categoryName}</td><td>${formatCurrency(revenue)}</td></tr>`;
-    }
-    catRevenueTable += `</tbody></table></div>`
-    reportHTML += catRevenueTable;
 
-    reportHTML += `<p><strong>Общая выручка:</strong> ${formatCurrency(totalRevenue)}</p>`;
+      tableRevenue[payment.table] += payment.total;
+
+      payment.items.forEach(item => {
+        if (!categoryRevenue[item.catIndex]) {
+          categoryRevenue[item.catIndex] = 0;
+        }
+        categoryRevenue[item.catIndex] += item.price * item.quantity;
+      });
+
+      if (payment.paymentMethod === 'cash') {
+        totalCash += payment.total;
+      } else {
+        totalCard += payment.total;
+      }
+      totalRevenue += payment.total;
+    });
+
+    reportHTML += `<h3>Выручка по столам</h3><table><thead><tr><th>Стол</th><th>Выручка</th></tr></thead><tbody>`;
+    let totalTableRevenue = 0;
+    for (const стол in tableRevenue) {
+      reportHTML += `<tr><td>${стол}</td><td>${formatCurrency(tableRevenue[стол])}</td></tr>`;
+      totalTableRevenue += tableRevenue[стол];
+    }
+    reportHTML += `</tbody></table>`;
+
+    // Category Revenue
+
+    reportHTML += `<div class="category-revenue">
+        <h3>Выручка по категориям</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Категория</th>
+                    <th>Выручка</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${Object.keys(categoryRevenue).map(catIndex => `
+                    <tr>
+                        <td>${categories[catIndex].name}</td>
+                        <td>${formatCurrency(categoryRevenue[catIndex])}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>`;
+            reportHTML += `<div class="payment-summary">
+        <p>Наличные: ${formatCurrency(totalCash)}</p>
+        <p>Картой: ${formatCurrency(totalCard)}</p>
+    </div>`;
+
+  reportHTML += `<div class='bottom-padding' style="margin-top: 20px; font-size: 1.2em; font-weight: bold;">Общая выручка: ${formatCurrency(totalRevenue)}</div>`;//Упростим и добами сразу style
+          //reportHTML
 
     dom.reportContainer.html(reportHTML);
 }
-
 function renderReportPagination(payments, totalPayments) {
     const totalPages = Math.ceil(totalPayments / ordersPerPage);
     dom.reportPaginationContainer.empty();
@@ -695,34 +779,39 @@ function renderReportPagination(payments, totalPayments) {
     }
 }
 
-function exportReportToCSV() {
+async function exportReportToPDF() {
     let payments = loadData('payments', []);
     if (!payments || payments.length === 0) {
         showToast('Нет данных для экспорта.', 'orange');
         return;
     }
 
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Столик,Дата,Способ оплаты,Сумма\r\n";
+    const element = dom.reportContainer[0];
 
-    payments.forEach(payment => {
-        const row = [
-            payment.table,
-            new Date(payment.timestamp).toLocaleString(),
-            payment.paymentMethod,
-            formatCurrency(payment.total)
-        ].join(",");
-        csvContent += row + "\r\n";
-    });
+    if (!element) {
+        showToast('Ошибка: Контейнер отчета не найден.', 'red');
+        return;
+    }
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "sales_report.csv");
-    document.body.appendChild(link); // Required for FF
+    // Add this line to check the content of the report container
+    console.log("Содержимое reportContainer:", dom.reportContainer.html());
 
-    link.click();
-    showToast('Отчет экспортирован в CSV!', 'green');
+    const opt = {
+        margin:       10,
+        filename:     'отчет_о_продажах.pdf',
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    try {
+        await html2pdf().set(opt).from(element).save();
+        showToast('Отчет экспортирован в PDF!', 'green');
+    } catch (error) {
+        console.error('Ошибка при экспорте в PDF:', error);
+        showToast('Ошибка при экспорте в PDF.', 'red');
+    }
 }
 
 // === UI Improvements ===
@@ -740,7 +829,7 @@ function hideSearchLoadingSpinner() {
 }
 
 function showSectionsBasedOnTableSelection() {
-    dom.tableSelectionSection.toggle(activeTable === null);
+    dom.tableSelectionSection.show(); // Отображать всегда
     dom.productSection.toggle(activeTable !== null);
     dom.cartSection.toggle(activeTable !== null);
 }
@@ -759,14 +848,22 @@ function showToast(message, color) {
 
 // === Initialization ===
 function initialize() {
-     //Added css to center the categories title
+    //Added css to center the categories title
     const styleSheet = $("<style>").html(".category { justify-content: center; }");
     $('head').append(styleSheet);
-    renderTables();
+
+    // Set active table if it was saved in localStorage
+    if (activeTable) {
+        dom.currentTableElement.text(`Столик ${activeTable}`);
+        showSectionsBasedOnTableSelection(); // Show sections based on the active table
+    }
+
+    renderTables(); //  Вызов renderTables() всегда
     renderCategories();
     setupEventListeners(); //Moved the setup after all the rendering is completed
+
     // Load products for the first category on initialization
-    if (categories.length > 0) {
+    if (categories.length > 0 && !activeTable) {
         renderProductsByCategory(0);
     }
 

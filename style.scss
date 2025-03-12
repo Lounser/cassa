@@ -1,12 +1,45 @@
 /* Общие стили */
+@font-face {
+    font-family: 'DejaVu Sans';
+    src: url('/DejaVuSans.ttf') format('truetype'); /*Укажите правильный путь*/
+}
+body {
+    font-family: 'DejaVu Sans', sans-serif;
+}
+
 body {
     font-family: 'Roboto', sans-serif;
     background-color: #f8f9fa;
     color: #495057;
     line-height: 1.6;
     overflow-x: hidden; /* Prevent horizontal scroll */
+.page-break {
+    h2 {
+        page-break-before: always;
+    }
+    page-break-inside: avoid; /* Избегаем разрыва внутри элемента */
+    page-break-after: always; /* Всегда начинаем новую страницу после элемента */
 }
-
+}
+.card {
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  
+  .card-body {
+    padding: 10px;
+  }
+  
+  .card-title {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+  
+  .card-text {
+    font-size: 1em;
+    margin-bottom: 3px;
+  }
 .container {
     max-width: 1200px;
     margin: 0 auto;
