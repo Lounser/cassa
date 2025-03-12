@@ -405,13 +405,30 @@ function clearCart() {
 
 // === Payment Logic ===
 function showPaymentModal() {
+    if (!activeTable) {
+        alert('Пожалуйста, выберите столик.');
+        return;
+    }
+
+    if (!orders[activeTable] || orders[activeTable].length === 0) {
+        alert('Корзина пуста. Добавьте товары перед оплатой.');
+        return;
+    }
+
     const paymentModal = new bootstrap.Modal($('#paymentModal')[0]);
     paymentModal.show();
 
     $('#confirmPayment').one('click', () => {
         const paymentMethod = $('input[name="paymentMethod"]:checked').val();
-        processPayment(paymentMethod);
-        paymentModal.hide();
+        processPayment(paymentMethod)
+            .then(() => {
+                paymentModal.hide(); // Закрываем модальное окно после оплаты
+                showPaymentSuccessModal(); // Показать модальное окно об успехе
+            })
+            .catch(error => {
+                console.error('Payment process failed:', error);
+                paymentModal.hide(); // Закрываем модальное окно при ошибке
+            });
     });
 }
 
@@ -556,6 +573,17 @@ function renderReportPage(payments, page) {
     let totalRevenue = 0;
 
     ordersToDisplay.forEach(payment => {
+        let orderItemsHTML = '';
+        if (payment.items && payment.items.length > 0) {
+            orderItemsHTML = '<ul class="list-unstyled">';
+            payment.items.forEach(item => {
+                orderItemsHTML += `<li>${item.name} x ${item.quantity} - ${formatCurrency(item.price * item.quantity)}</li>`;
+            });
+            orderItemsHTML += '</ul>';
+        } else {
+            orderItemsHTML = '<p>Нет товаров в заказе.</p>';
+        }
+
       reportHTML += `
           <div class="card mb-3">
               <div class="card-body">
@@ -563,6 +591,8 @@ function renderReportPage(payments, page) {
                   <p class="card-text"><strong>Дата:</strong> ${new Date(payment.timestamp).toLocaleString()}</p>
                   <p class="card-text"><strong>Способ оплаты:</strong> ${payment.paymentMethod}</p>
                   <p class="card-text"><strong>Сумма:</strong> ${formatCurrency(payment.total)}</p>
+                  <p class="card-text"><strong>Заказанные товары:</strong></p>
+                  ${orderItemsHTML}
               </div>
           </div>`;
         if (payment.paymentMethod === 'cash') {
