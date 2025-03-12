@@ -377,7 +377,7 @@ function setupEventListeners() {
     dom.searchField.on('input', searchProducts);
     dom.generateReportButton.on('click', generateReport);
     dom.clearReportButton.on('click', clearReports);
-    dom.exportReportButton.on('click', exportReportToPDF);
+    dom.exportReportButton.on('click', exportReportToWord);
 
     dom.productsContainer.on('click', '.add-to-cart-btn', function() {
         const product = $(this).data('product'); // Access the stored product object directly
@@ -606,129 +606,146 @@ function renderReportPage(payments, page) {
     const startIndex = (page - 1) * ordersPerPage;
     const endIndex = startIndex + ordersPerPage;
     const ordersToDisplay = payments.slice(startIndex, endIndex);
-  
-    let reportHTML = `<style>
-        body {
-          font-family: sans-serif;
-          line-height: 1.4;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 20px; /*Добавляем отступ до и после таблиц*/
-        }
-        th,
-        td {
-          border: 1px solid #ddd;
-          padding: 8px;
-          text-align: left;
-        }
-        th {
-          background-color: #f2f2f2;
-        }
-        .payment-summary {
-          margin-top: 20px;
-          font-weight: bold;
-          font-size: 1.1em; /* Increase font size for prominence */
-        }
-        .category-revenue {
-          margin-top: 20px;
-        }
-        .category-revenue table {
-          width: 50%;
-        }
-        .page-break {
-          page-break-inside: avoid;
-          page-break-after: always;
-        }
-        .bottom-padding{ margin-bottom: 50px;}/*Увеличим низний отступ*/
 
-        /* Ensure that all containers expand to content height */
-        #report-container {
-          overflow: visible !important; /* Override any clipping */
-          position: relative; /* Ensure proper layout when needed */
-          width: 100%; /* Take full width */
-        }
-        /* Optional: style the list to be less bulky */
-        ul {
-          list-style-type: none;
-          padding: 0;
-        }
-        li {
-          margin-bottom: 0.5em;
-        }
-    </style>`;
-
+    let reportHTML = '';
     let totalCash = 0;
     let totalCard = 0;
     let categoryRevenue = {};
     let totalRevenue = 0;
-    let tableRevenue = {};
 
-    reportHTML += '<h2>Отчет о продажах</h2>';
-
-//Рассчитываем выручку по столам и по категориям сразу в этом цикле.
     ordersToDisplay.forEach(payment => {
-      if (!tableRevenue[payment.table]) {
-        tableRevenue[payment.table] = 0;
-      }
-
-      tableRevenue[payment.table] += payment.total;
-
-      payment.items.forEach(item => {
-        if (!categoryRevenue[item.catIndex]) {
-          categoryRevenue[item.catIndex] = 0;
+        let orderItemsHTML = '';
+        if (payment.items && payment.items.length > 0) {
+            orderItemsHTML = '<ul class="list-unstyled">';
+            payment.items.forEach(item => {
+                orderItemsHTML += `<li>${item.name} x ${item.quantity} - ${formatCurrency(item.price * item.quantity)}</li>`;
+            });
+            orderItemsHTML += '</ul>';
+        } else {
+            orderItemsHTML = '<p>Нет товаров в заказе.</p>';
         }
-        categoryRevenue[item.catIndex] += item.price * item.quantity;
-      });
 
-      if (payment.paymentMethod === 'cash') {
-        totalCash += payment.total;
-      } else {
-        totalCard += payment.total;
-      }
-      totalRevenue += payment.total;
+        reportHTML += `
+          <div class="card mb-3">
+              <div class="card-body">
+                  <h5 class="card-title">Столик ${payment.table}</h5>
+                  <p class="card-text"><strong>Дата:</strong> ${new Date(payment.timestamp).toLocaleString()}</p>
+                  <p class="card-text"><strong>Способ оплаты:</strong> ${payment.paymentMethod}</p>
+                  <p class="card-text"><strong>Сумма:</strong> ${formatCurrency(payment.total)}</p>
+                  <p class="card-text"><strong>Заказанные товары:</strong></p>
+                  ${orderItemsHTML}
+              </div>
+          </div>`;
+        if (payment.paymentMethod === 'cash') {
+            totalCash += payment.total;
+        } else if (payment.paymentMethod === 'card') {
+            totalCard += payment.total;
+        }
+        totalRevenue += payment.total;
     });
 
-    reportHTML += `<h3>Выручка по столам</h3><table><thead><tr><th>Стол</th><th>Выручка</th></tr></thead><tbody>`;
-    let totalTableRevenue = 0;
-    for (const стол in tableRevenue) {
-      reportHTML += `<tr><td>${стол}</td><td>${formatCurrency(tableRevenue[стол])}</td></tr>`;
-      totalTableRevenue += tableRevenue[стол];
+    // Summary of payment methods
+    reportHTML += `
+        <div class="payment-summary mt-3">
+            <h5>Итоги по способам оплаты</h5>
+            <p><strong>Оплат наличными:</strong> ${formatCurrency(totalCash)}</p>
+            <p><strong>Оплат картой:</strong> ${formatCurrency(totalCard)}</p>
+        </div>
+    `;
+
+    let catRevenueTable = `<div class="revenue-by-category mt-3"><p><strong>Выручка по категориям:</strong></p><table class="table">
+        <thead>
+            <tr>
+                <th>Категория</th>
+                <th>Выручка</th>
+            </tr>
+        </thead>
+        <tbody>`;
+    let totalCatRevenue = 0;
+    ordersToDisplay.forEach(payment => {
+        if(payment.items && payment.items.length > 0){
+            payment.items.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                if (!categoryRevenue[item.catIndex]) {
+                    categoryRevenue[item.catIndex] = 0;
+                }
+                categoryRevenue[item.catIndex] += itemTotal;
+            });
+        }
+    });
+    for (const catIndex in categoryRevenue) {
+        const categoryName = categories[catIndex].name;
+        const revenue = categoryRevenue[catIndex];
+        totalCatRevenue += revenue;
+        catRevenueTable += `<tr><td>${categoryName}</td><td>${formatCurrency(revenue)}</td></tr>`;
     }
-    reportHTML += `</tbody></table>`;
+    catRevenueTable += `</tbody></table></div>`;
+    reportHTML += catRevenueTable;
 
-    // Category Revenue
-
-    reportHTML += `<div class="category-revenue">
-        <h3>Выручка по категориям</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Категория</th>
-                    <th>Выручка</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${Object.keys(categoryRevenue).map(catIndex => `
-                    <tr>
-                        <td>${categories[catIndex].name}</td>
-                        <td>${formatCurrency(categoryRevenue[catIndex])}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>`;
-            reportHTML += `<div class="payment-summary">
-        <p>Наличные: ${formatCurrency(totalCash)}</p>
-        <p>Картой: ${formatCurrency(totalCard)}</p>
-    </div>`;
-
-  reportHTML += `<div class='bottom-padding' style="margin-top: 20px; font-size: 1.2em; font-weight: bold;">Общая выручка: ${formatCurrency(totalRevenue)}</div>`;//Упростим и добами сразу style
-          //reportHTML
+    reportHTML += `<div class="total-revenue mt-3"><p><strong>Общая выручка:</strong> ${formatCurrency(totalRevenue)}</p></div>`;
 
     dom.reportContainer.html(reportHTML);
 }
+
+function exportReportToWord() {
+    const reportElement = document.getElementById('report-container');
+
+    if (!reportElement || !reportElement.innerHTML.trim()) {
+        showToast('Нет данных для экспорта.', 'orange');
+        return;
+    }
+
+    const reportTitle = reportElement.querySelector('h2')?.textContent || 'Отчет о продажах';
+
+    let plainTextContent = `**${reportTitle}**\n\n`;
+
+    const sections = reportElement.querySelectorAll('.card, .payment-summary, .revenue-by-category, .total-revenue');
+
+    sections.forEach(section => {
+        const titleElements = section.querySelectorAll('h5, p');
+        let title = '';
+
+        titleElements.forEach(el => {
+            if (el.tagName === 'H5' || (el.tagName === 'P' && el.querySelector('strong'))) {
+                title += el.textContent + ' ';
+            }
+        });
+        title = title.trim();
+
+
+        if (title) {
+            plainTextContent += `**${title}**\n\n`;
+        }
+
+        const paragraphs = section.querySelectorAll('p');
+
+        paragraphs.forEach(paragraph => {
+            plainTextContent += `${paragraph.textContent}\n`;
+        });
+
+        plainTextContent += '\n\n';
+    });
+
+    const blob = new Blob([plainTextContent], { type: 'application/msword' });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${reportTitle.replace(/ /g, '_')}.doc`;
+
+    // Центрирование ссылки на скачивание
+    document.body.appendChild(a);
+    a.style.display = 'block';
+    a.style.margin = '0 auto'; // Это центрирует элемент по горизонтали
+    a.style.textAlign = 'center'; // Это выравнивает текст внутри элемента по центру (необязательно, но может быть полезно)
+    a.click();
+
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast(`Отчет "**${reportTitle}**" экспортирован в Word!`, 'green', 3000);
+}
+
 function renderReportPagination(payments, totalPayments) {
     const totalPages = Math.ceil(totalPayments / ordersPerPage);
     dom.reportPaginationContainer.empty();
@@ -779,51 +796,138 @@ function renderReportPagination(payments, totalPayments) {
     }
 }
 
-async function exportReportToPDF() {
-    let payments = loadData('payments', []);
-    if (!payments || payments.length === 0) {
+function exportReportToWord() {
+    const reportElement = document.getElementById('report-container');
+
+    if (!reportElement || !reportElement.innerHTML.trim()) {
         showToast('Нет данных для экспорта.', 'orange');
         return;
     }
 
-    const element = dom.reportContainer[0];
+    const reportTitle = reportElement.querySelector('h2')?.textContent.trim() || 'Отчет о продажах';
 
-    if (!element) {
-        showToast('Ошибка: Контейнер отчета не найден.', 'red');
-        return;
-    }
+    let htmlContent = `<!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="UTF-8">
+    <title>${reportTitle}</title>
+    <style>
+      body {
+        font-style: normal;
+        font-family: 'Roboto', sans-serif;
+      }
+      h2 {
+        font-family: 'Roboto', sans-serif;
+        font-size: 1.5em;
+        font-weight: normal;
+        margin-bottom: 0.5em;
+      }
+      h5 {
+      font-family: 'Roboto', sans-serif;
+        font-size: 1.1em;
+        font-weight: normal;
+        margin-bottom: 0.3em;
+      }
+      p {
+      font-family: 'Roboto', sans-serif;
+        margin-bottom: 0.3em;
+        font-weight: normal;
+      }
+      .card {
+          margin-bottom: 2em;  /* Увеличенное расстояние между блоками card */
+          border: 1px solid #ccc;
+          padding: 0.5em;
+      }
+      .payment-summary { margin-top: 1em; margin-bottom: 2em; }  /*Увеличенный отступ*/
+      .revenue-by-category { margin-bottom: 2em; } /*Увеличенный отступ*/
+      .revenue-by-category table { width: 100%; border-collapse: collapse; }
+      .revenue-by-category th, .revenue-by-category td { border: 1px solid #ccc; padding: 0.3em; text-align: left; }
+      .revenue-by-category th { background-color: #f0f0f0; }
+      .total-revenue { margin-top: 1em; }
+    </style>
+    </head>
+    <body>
+      <h2>${reportTitle}</h2>`;
 
-    // Add this line to check the content of the report container
-    console.log("Содержимое reportContainer:", dom.reportContainer.html());
+    const sections = reportElement.querySelectorAll('.card, .payment-summary, .revenue-by-category, .total-revenue');
 
-    const opt = {
-        margin:       10,
-        filename:     'отчет_о_продажах.pdf',
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2 },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    };
+    sections.forEach(section => {
+        if (section.classList.contains('card')) {
+            const title = section.querySelector('h5')?.textContent.trim() || '';
+            htmlContent += `<div class="card"><h5>${title}</h5>`; // Используем card
 
-    try {
-        await html2pdf().set(opt).from(element).save();
-        showToast('Отчет экспортирован в PDF!', 'green');
-    } catch (error) {
-        console.error('Ошибка при экспорте в PDF:', error);
-        showToast('Ошибка при экспорте в PDF.', 'red');
-    }
+            const paragraphs = section.querySelectorAll('p');
+            paragraphs.forEach(paragraph => {
+                htmlContent += `<p>${paragraph.textContent.trim()}</p>`;
+            });
+
+            htmlContent += `</div>`;
+        } else if (section.classList.contains('payment-summary')) {
+            const title = section.querySelector('h5')?.textContent.trim() || 'Итоги по способам оплаты';
+            htmlContent += `<div class="payment-summary"><h5>${title}</h5>`;
+            const paragraphs = section.querySelectorAll('p');
+            paragraphs.forEach(paragraph => {
+                htmlContent += `<p>${paragraph.textContent.trim()}</p>`;
+            });
+            htmlContent += `</div>`;
+
+        } else if (section.classList.contains('revenue-by-category')) {
+             const title = section.querySelector('h5')?.textContent.trim() || 'Выручка по категориям';
+             htmlContent += `<div class="revenue-by-category"><h5>${title}</h5>`;
+             htmlContent += '<table>';
+             const headers = section.querySelectorAll('th');
+             if (headers.length > 0) {
+                 htmlContent += '<thead><tr>';
+                 headers.forEach(header => {
+                     htmlContent += `<th>${header.textContent.trim()}</th>`;
+                 });
+                 htmlContent += '</tr></thead>';
+             }
+
+             const rows = section.querySelectorAll('tr');
+             rows.forEach((row, index) => {
+                 if (index === 0 && headers.length > 0) return;  // Пропускаем заголовок, если он уже обработан
+                 const cells = row.querySelectorAll('td');
+                 if (cells.length > 0) {
+                     htmlContent += '<tr>';
+                     cells.forEach(cell => {
+                         htmlContent += `<td>${cell.textContent.trim()}</td>`;
+                     });
+                     htmlContent += '</tr>';
+                 }
+             });
+
+             htmlContent += '</table></div>';
+         } else if (section.classList.contains('total-revenue')){
+            htmlContent += `<div class="total-revenue">`;
+            const paragraphs = section.querySelectorAll('p');
+            paragraphs.forEach(paragraph => {
+                htmlContent += `<p>${paragraph.textContent.trim()}</p>`;
+            });
+             htmlContent += `</div>`;
+         }
+    });
+
+    htmlContent += `</body></html>`;
+
+    const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });  // Важно: \ufeff - BOM
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${reportTitle.replace(/ /g, '_')}.doc`;
+
+    document.body.appendChild(a);
+    a.style.display = 'block';
+    a.style.margin = '0 auto';
+    a.style.textAlign = 'center';
+    a.click();
+
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast(`Отчет "**${reportTitle}**" экспортирован в Word!`, 'green', 3000);
 }
-
-// === UI Improvements ===
-function showSearchLoadingSpinner() {
-    if(!isSearching){
-        return;
-    }
-    dom.searchSpinnerContainer.addClass('d-flex justify-content-center mt-2');  // Add class to jQuery object.
-    dom.searchSpinnerContainer.html('<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Загрузка...</span></div>');
-    dom.productSection.prepend(dom.searchSpinnerContainer); //  Prepend jQuery object directly
-}
-
 function hideSearchLoadingSpinner() {
      dom.searchSpinnerContainer.remove(); //Use jQuery's .remove() to remove the element
 }
