@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка | Бариста</title>
+  <meta name="description" content="Админ-панель для управления данными кафе Бариста">
+  <meta name="keywords" content="админка, бариста, управление данными, кафе">
+  <meta name="author" content="Ваше Имя">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick-theme.min.css">
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+  <!-- Toastify CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="admin.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+  <!-- Loading Indicator -->
+  <div id="loading" class="loading-overlay" style="display: none;">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Загрузка...</span>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <main class="container py-4">
+
+    <!-- Authentication Section -->
+    <section id="auth-section" class="auth-section">
+      <form id="login-form" class="login-form">
+        <fieldset>
+          <legend>Авторизация</legend>
+          <div class="mb-3">
+            <label for="username" class="form-label">Имя пользователя</label>
+            <input type="text" id="username" class="form-control" placeholder="Введите имя пользователя" required>
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Пароль</label>
+            <input type="password" id="password" class="form-control" placeholder="Введите пароль" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100" id="login-button" aria-label="Войти в систему">Войти</button>
+        </fieldset>
+      </form>
+    </section>
+
+    <!-- Admin Content Section -->
+    <section id="admin-content" class="admin-content" style="display: none;">
+
+      <!-- Header -->
+      <header class="admin-header mb-4">
+        <h1 class="text-center">Админка</h1>
+        <a href="index.html" class="btn btn-primary">Перейти в Кассу</a>
+      </header>
+
+      <!-- Data Management -->
+      <article class="data-management mb-4">
+        <div class="d-flex align-items-center justify-content-between">
+          <h2>Управление данными</h2>
+          <div>
+            <button class="btn btn-secondary" id="export-data-button" aria-label="Экспорт данных">
+              <i class="fas fa-file-export me-1" aria-hidden="true"></i> Экспорт
+            </button>
+
+            <div id="export-options" class="export-options" style="display: none;">
+              <select id="export-format" class="form-select form-select-sm" aria-label="Выберите формат экспорта">
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+              </select>
+              <button class="btn btn-sm btn-outline-secondary" id="export-button">Экспорт</button>
+            </div>
+
+            <button class="btn btn-secondary" id="import-data-button" aria-label="Импорт данных">
+              <i class="fas fa-file-import me-1" aria-hidden="true"></i> Импорт
+            </button>
+            <input type="file" id="import-file" style="display: none;" accept=".json,.csv">            
+          </div>
+        </div>
+      </article>
+
+      <!-- Category Management -->
+      <article class="category-management mb-4">
+        <h2>Категории</h2>
+        <form id="add-category-form">
+          <div class="input-group mb-3">
+            <input type="text" id="categoryName" class="form-control" placeholder="Название категории"
+              aria-label="Название категории" required>
+            <button class="btn btn-success" id="add-category-button" aria-label="Добавить категорию" type="submit">
+              <i class="fas fa-plus" aria-hidden="true"></i> Добавить
+            </button>
+          </div>
+        </form>
+
+        <ul id="categoryList" class="list-group"></ul>
+      </article>
+
+      <!-- Product Management -->
+      <article class="product-management mb-4">
+        <h2>Товары</h2>
+        <form id="add-product-form">
+          <div class="input-group mb-3">
+            <select id="productCategory" class="form-select" aria-label="Категория товара" required></select>
+            <input type="text" id="productName" class="form-control" placeholder="Название товара"
+              aria-label="Название товара" required>
+            <input type="text" id="productPrice" class="form-control" placeholder="Цена" aria-label="Цена" required>
+            <button class="btn btn-success" id="add-product-button" aria-label="Добавить товар" type="submit">
+              <i class="fas fa-plus" aria-hidden="true"></i> Добавить
+            </button>
+          </div>
+        </form>
+
+        <!-- Product Filters -->
+        <div class="filters mb-3">
+          <div class="row g-2">
+            <div class="col-md-4">
+              <select id="categoryFilter" class="form-select" aria-label="Фильтр по категориям">
+                <option value="">Все категории</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <select id="priceFilter" class="form-select" aria-label="Фильтр по цене">
+                <option value="">Все цены</option>
+                <option value="0-50">0 - 50 ₽</option>
+                <option value="50-100">50 - 100 ₽</option>
+                <option value="100-150">100 - 150 ₽</option>
+                <option value="150+">Более 150 ₽</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <input type="text" id="searchInput" class="form-control" placeholder="Поиск товаров по имени"
+                aria-label="Поиск товаров по имени">
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-2">
+            <select id="sortSelect" class="form-select w-auto" aria-label="Сортировка">
+              <option value="name">По имени</option>
+              <option value="price">По цене</option>
+            </select>
+            <button class="btn btn-secondary" id="reset-filters-button">Сбросить фильтры</button>
+          </div>
+        </div>
+
+        <!-- Product Table -->
+        <div class="table-responsive">
+          <table class="table">
+            <caption>Список товаров</caption>
+            <thead>
+              <tr>
+                <th>Название</th>
+                <th>Цена</th>
+                <th>Категория</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="productList"></tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <nav aria-label="Пагинация">
+          <div class="pagination-container" id="pagination"></div>
+        </nav>
+      </article>
+
+      <!-- Discount Management -->
+      <article class="discount-management mb-4">
+        <h2>Скидки</h2>
+        <form id="add-discount-form">
+          <div class="input-group">
+            <select id="discountProduct" class="form-select" aria-label="Выберите товар для скидки"></select>
+            <input type="number" id="discountAmount" class="form-control" placeholder="Сумма скидки"
+              aria-label="Сумма скидки">
+            <button class="btn btn-success" id="add-discount-button" type="submit">Создать скидку</button>
+          </div>
+        </form>
+      </article>
+
+      <!-- Clear Data -->
+      <aside class="clear-data mt-4">
+        <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#clearDataModal">Очистить БД</button>
+      </aside>
+
+    </section>
+
+  </main>
+
+  <!-- ========================= MODALS ========================= -->
+
+  <!-- Edit Product Modal -->
+  <div class="modal fade" id="editProductModal" tabindex="-1" aria-labelledby="editProductModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editProductModalLabel">Редактировать товар</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="editProductName" class="form-label">Название товара</label>
+            <input type="text" id="editProductName" class="form-control" placeholder="Название товара">
+          </div>
+          <div class="mb-3">
+            <label for="editProductPrice" class="form-label">Цена</label>
+            <input type="text" id="editProductPrice" class="form-control" placeholder="Цена">
+          </div>
+          <div class="mb-3">
+            <label for="editProductDiscount" class="form-label">Скидка</label>
+            <input type="number" id="editProductDiscount" class="form-control" placeholder="Скидка">
+          </div>
+          <div id="edit-product-error" class="text-danger"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="button" class="btn btn-primary" id="save-edited-product-button">Сохранить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Product Modal -->
+  <div class="modal fade" id="deleteProductModal" tabindex="-1" aria-labelledby="deleteProductModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="deleteProductModalLabel">Удалить товар</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+        </div>
+        <div class="modal-body">
+          danger" id="delete-product-confirm-button">Удалить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clear Data Modal -->
+  <div class="modal fade" id="clearDataModal" tabindex="-1" aria-labelledby="clearDataModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="clearDataModalLabel">Очистка данных</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+        </div>
+        <div class="modal-body">
+          <p>Вы уверены, что хотите полностью очистить базу данных? Это действие необратимо!</p>
+          <input type="password" id="clearDataCode" class="form-control" placeholder="Введите код подтверждения">
+          <div id="clear-data-error" class="text-danger"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="button" class="btn btn-danger" id="clear-data-confirm-button">Очистить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================= TEMPLATES ========================= -->
+
+  <!-- Template for Product Rows -->
+  <template id="productRowTemplate">
+    <tr>
+      <td>{{name}}</td>
+      <td>{{price}} ₽ {{#if discount}} (скидка: {{discount}} ₽, итого: {{discountedPrice}} ₽){{/if}}</td>
+      <td>{{categoryName}}</td>
+      <td class="table-actions">
+        <button class="btn btn-sm btn-primary edit-product" data-id="{{catIndex}}-{{prodIndex}}" aria-label="Редактировать товар">
+          <i class="fas fa-pencil-alt" aria-hidden="true"></i>
+      </button>
+        <button class="btn btn-sm btn-danger delete-product" data-id="{{catIndex}}-{{prodIndex}}"
+          aria-label="Удалить товар">
+          <i class="fas fa-trash-alt" aria-hidden="true"></i>
+        </button>
+      </td>
+    </tr>
+  </template>
+
+  <!-- Template for Category List Items -->
+  <template id="categoryListItemTemplate">
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      {{name}} ({{productCount}})
+      <button class="btn btn-sm btn-danger delete-category" aria-label="Удалить категорию">
+        <i class="fas fa-trash-alt" aria-hidden="true"></i>
+      </button>
+    </li>
+  </template>
+
+  <!-- ========================= SCRIPTS ========================= -->
+
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.js"></script>
+  <!-- jQuery Input Mask -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.inputmask/5.0.7/jquery.inputmask.min.js"
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <!-- Bootstrap Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Toastify JS -->
+  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+
+  <!-- Handlebars JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.7.7/handlebars.min.js"></script>
+
+  <!-- Your Scripts -->
+  <script src="auth.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
